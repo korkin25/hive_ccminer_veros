@@ -28,6 +28,7 @@ minerexe="./ccminer-veros.cuda${cudaver}"
 
 if [ ! -x "${minerexe}" ]; then
    echo "Miner ${miner_archive} required to download."
+   put Veros miner binary to "`pwd`/$minerexe"
    exit 1
 fi
 
