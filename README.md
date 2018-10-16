@@ -1,0 +1,1 @@
+# hive_ccminer_veros
