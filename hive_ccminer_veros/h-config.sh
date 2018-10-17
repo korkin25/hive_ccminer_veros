@@ -9,7 +9,7 @@ algo=${CUSTOM_ALGO}
 if [ ! -z ${algo} ]; then
    algo="-a ${algo}"
 else
-   algo="-a veros"
+   algo="-a verus"
 fi
 
 if [ -z ${CUSTOM_PASS} ]; then
