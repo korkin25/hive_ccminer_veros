@@ -32,5 +32,5 @@ if [ ! -x "${minerexe}" ]; then
    exit 1
 fi
 
-   ./veros_run "${minerexe}" $(< $CUSTOM_CONFIG_FILENAME) | tee "${CUSTOM_CONFIG_FILENAME}"
+   ./veros_run "${minerexe}" $(< $CUSTOM_CONFIG_FILENAME) | tee "${CUSTOM_LOG_BASENAME}.log}"
 
