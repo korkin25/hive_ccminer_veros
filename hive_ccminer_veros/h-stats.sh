@@ -1,40 +1,38 @@
 #!/usr/bin/env bash
 
-threads=`echo "threads" | nc -w $API_TIMEOUT localhost $API_PORT | tr -d '\0'` #&& echo $threads
+. /hive/custom/hive_ccminer_veros/h-manifest.conf
+
+threads=`echo "threads" | nc -w ${API_TIMEOUT} localhost $API_PORT | tr -d '\0'` #&& echo $threads
 if [[ $? -ne 0  || -z $threads ]]; then
-	echo -e "${YELLOW}Failed to read $miner stats from localhost:4068${NOCOLOR}"
+	echo -e "${YELLOW}Failed to read ${CUSTOM_NAME} stats from localhost:${API_PORT}${NOCOLOR}"
 else
-	summary=`echo "summary" | nc -w 2 localhost $API_PORT | tr -d '\0'`
-	re=';UPTIME=([0-9]+);' && [[ $summary =~ $re ]] && local uptime=${BASH_REMATCH[1]} #&& echo "Matched" || echo "No match"
-	#khs will calculate from cards; re=';KHS=([0-9\.]+);' && [[ $summary =~ $re ]] && khs=${BASH_REMATCH[1]} #&& echo "Matched" || echo "No match"
+   summary=`echo "summary" | nc -w ${API_TIMEOUT} localhost $API_PORT | tr -d '\0'` #&& echo $threads
+   uptime=`echo "$summary" |  tr ';' '\n' | grep -m1 'UPTIME=' | sed -e 's/.*=//'`
 	algo=`echo "$summary" | tr ';' '\n' | grep -m1 'ALGO=' | sed -e 's/.*=//'`
-	local ac=`echo "$summary" | tr ';' '\n' | grep -m1 'ACC=' | sed -e 's/.*=//'`
-	local rj=`echo "$summary" | tr ';' '\n' | grep -m1 'REJ=' | sed -e 's/.*=//'`
-	#stats=`echo $threads | tr '|' '\n' | tr ';' '\n' | tr -cd '\11\12\15\40-\176' | grep -E 'KHS=' | sed -e 's/.*=//' | jq -cs '{khs:.}'`
+	ac=`echo "$summary" | tr ';' '\n' | grep -m1 'ACC=' | sed -e 's/.*=//'`
+	rj=`echo "$summary" | tr ';' '\n' | grep -m1 'REJ=' | sed -e 's/.*=//'`
 	striplines=`echo "$threads" | tr '|' '\n' | tr ';' '\n' | tr -cd '\11\12\15\40-\176'`
 
-	#if GPU has 0.0 temp it hanged. ccminer does not mine on this card but shows hashrate
-	cctemps=(`echo "$striplines" | grep 'TEMP=' | sed -e 's/.*=//'`) #echo ${cctemps[@]} | tr " " "\n" #print it in lines
+	cctemps=(`echo "$striplines" | grep 'TEMP=' | sed -e 's/.*=//'`)
 	cckhs=(`echo "$striplines" | grep 'KHS=' | sed -e 's/.*=//'`)
 	ccbusids=(`echo "$striplines" | grep 'BUS=' | sed -e 's/.*=//'`)
-	local bus_numbers=$(jq -sc . <<< "$ccbusids")
+	bus_numbers=$(jq -sc . <<< "$ccbusids")
 
+   echo $gpu_stats
 
-	#local nvidiastats
 	for (( i=0; i < ${#cckhs[@]}; i++ )); do
 		#if temp is 0 then driver or GPU failed
-		[[ ${cctemps[$i]} == "0.0" ]] && cckhs[$i]="0.0"
+#		[[ ${cctemps[$i]} == "0.0" ]] && cckhs[$i]="0.0"
 
-		#cckhs[$i]="84316579.94" #test
-		#check Ghs. 1080ti gives ~64mh (64000kh) on lyra. when it's showing ghs then load is 0 on gpu
-		#if [[ `echo ${cckhs[$i]} | awk '{ print ($1 >= 1000000) ? 1 : 0 }'` == 1 ]]; then #hash is in Ghs, >= 1000000 khs
+      cckhs[$i]=`echo ${cckhs[$i]} | awk '{print $1/1000}'`
 		if [[ `echo ${cckhs[$i]} | awk '{ print ($1 >= 1000) ? 1 : 0 }'` == 1 ]]; then # > 1Mh
 			#[[ -z $nvidiastats ]] && nvidiastats=`gpu-stats nvidia` #a bit overhead in calling nvidia-smi again
-			local busid=`echo ${ccbusids[$i]} | awk '{ printf("%02x:00.0", $1) }'` #ccbus is decimal
-			local load_i=`echo "$gpu_stats" | jq ".busids|index(\"$busid\")"`
+			busid=`echo ${ccbusids[$i]} | awk '{ printf("%02x:00.0", $1) }'` #ccbus is decimal
+			load_i=`echo "$gpu_stats" | jq ".busids|index(\"$busid\")"`
 			if [[ $load_i != "null" ]]; then #can be null on failed driver
-				local load=`echo "$gpu_stats" | jq -r ".load[$load_i]"`
-				#load=0 #test
+				load=`echo "$gpu_stats" | jq -r ".load[$load_i]"`
+			echo "$gpu_stats" | jq -r ".temp[$load_i]"
+			   #echo ${cctemps[$i]}
 				[[ -z $load || $load -le 10 ]] &&
 					echo -e "${RED}Hash on GPU$i is in GH/s (${cckhs[$i]} kH/s) but Load is detected to be only $load%${NOCOLOR}" &&
 					cckhs[$i]="0.0"
@@ -55,4 +53,6 @@ else
 		--arg ac "$ac" --arg rj "$rj" --argjson bus_numbers "$bus_numbers" \
 		'{$khs, $temp, $fan, $uptime, ar: [$ac, $rj], $bus_numbers, $algo}')
 fi
+
+echo $stats
 
